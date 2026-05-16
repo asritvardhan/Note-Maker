@@ -1,0 +1,507 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Notes API",
+    "version": "1.0.0",
+    "description": "REST API for user authentication and note management (pin, priority, search, share)."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000",
+      "description": "Local development"
+    }
+  ],
+  "tags": [
+    { "name": "Auth", "description": "Registration and login" },
+    { "name": "Notes", "description": "CRUD and sharing for notes" },
+    { "name": "About", "description": "App metadata" }
+  ],
+  "paths": {
+    "/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register a new user",
+        "operationId": "registerUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" },
+                "example": { "message": "User registered successfully" }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing email or password",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "409": {
+            "description": "Email already registered",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Log in and receive a JWT",
+        "operationId": "loginUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LoginResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/notes": {
+      "get": {
+        "tags": ["Notes"],
+        "summary": "List notes for the authenticated user",
+        "operationId": "getNotes",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "default": 1 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "default": 10 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of notes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Note" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      },
+      "post": {
+        "tags": ["Notes"],
+        "summary": "Create a note",
+        "operationId": "createNote",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateNoteRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Note created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Note" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/notes/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string" },
+          "description": "Note MongoDB ObjectId"
+        }
+      ],
+      "get": {
+        "tags": ["Notes"],
+        "summary": "Get a single note",
+        "description": "Accessible if you own the note or it was shared with you.",
+        "operationId": "getSingleNote",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Note found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Note" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": {
+            "description": "Not owner and not in sharedWith",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      },
+      "put": {
+        "tags": ["Notes"],
+        "summary": "Update a note",
+        "description": "Only the note owner can update.",
+        "operationId": "updateNote",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateNoteRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Note updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Note" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": {
+            "description": "Not the note owner",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      },
+      "delete": {
+        "tags": ["Notes"],
+        "summary": "Delete a note",
+        "description": "Only the note owner can delete.",
+        "operationId": "deleteNote",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "204": { "description": "Note deleted" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": {
+            "description": "Not the note owner",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/notes/{id}/share": {
+      "post": {
+        "tags": ["Notes"],
+        "summary": "Share a note with another user by email",
+        "operationId": "shareNote",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Note MongoDB ObjectId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ShareNoteRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Note shared",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" },
+                "example": { "message": "Note shared successfully" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": {
+            "description": "Not the note owner",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "404": {
+            "description": "Note or target user not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/search": {
+      "get": {
+        "tags": ["Notes"],
+        "summary": "Search your notes by title or content",
+        "operationId": "searchNotes",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Search keyword (case-insensitive regex)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching notes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Note" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/about": {
+      "get": {
+        "tags": ["About"],
+        "summary": "Get app and feature information",
+        "operationId": "getAbout",
+        "responses": {
+          "200": {
+            "description": "About payload",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AboutResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT from POST /login (`access_token`). Send as `Authorization: Bearer <token>`."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string" }
+        },
+        "required": ["message"]
+      },
+      "MessageResponse": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string" }
+        },
+        "required": ["message"]
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string", "format": "password", "minLength": 1 }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string", "format": "password" }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "required": ["access_token"],
+        "properties": {
+          "access_token": { "type": "string", "description": "JWT for protected routes" }
+        }
+      },
+      "NotePriority": {
+        "type": "string",
+        "enum": ["low", "medium", "high"],
+        "default": "low"
+      },
+      "Note": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "title": { "type": "string" },
+          "content": { "type": "string" },
+          "owner": { "type": "string", "description": "User ObjectId" },
+          "sharedWith": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "User ObjectIds with shared access"
+          },
+          "isPinned": { "type": "boolean", "default": false },
+          "priority": { "$ref": "#/components/schemas/NotePriority" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["title", "content"]
+      },
+      "CreateNoteRequest": {
+        "type": "object",
+        "required": ["title", "content"],
+        "properties": {
+          "title": { "type": "string" },
+          "content": { "type": "string" },
+          "isPinned": { "type": "boolean", "default": false },
+          "priority": { "$ref": "#/components/schemas/NotePriority" }
+        }
+      },
+      "UpdateNoteRequest": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "content": { "type": "string" },
+          "isPinned": { "type": "boolean" },
+          "priority": { "$ref": "#/components/schemas/NotePriority" }
+        }
+      },
+      "ShareNoteRequest": {
+        "type": "object",
+        "required": ["share_with_email"],
+        "properties": {
+          "share_with_email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email of the user to share with"
+          }
+        }
+      },
+      "AboutResponse": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "my features": {
+            "type": "object",
+            "additionalProperties": { "type": "string" },
+            "example": {
+              "Pinned Notes": "Users can pin important notes for quick access.",
+              "Priority Levels": "Allows users to organize notes based on urgency.",
+              "Search Notes": "Users can quickly search notes using keywords."
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing or invalid JWT",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "examples": {
+              "noToken": { "value": { "message": "No token provided" } },
+              "invalidToken": { "value": { "message": "Invalid token" } }
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "message": "Note not found" }
+          }
+        }
+      },
+      "ServerError": {
+        "description": "Internal server error",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      }
+    }
+  }
+}
